@@ -8,7 +8,7 @@
 >   ```yaml
 >   actual-truelayer-sync:
 >     build:
->       context: "https://github.com/harrytouche/actual-truelayer-sync.git#env-api-version"
+>       context: "https://github.com/harrytouche/actual-truelayer-sync.git"
 >       args:
 >         ACTUAL_API_VERSION: ${ACTUAL_VERSION}  # same value as your Actual server image tag
 >   ```
