@@ -1,5 +1,20 @@
 # actual-truelayer-sync
 
+> **Fork of [sheppy/actual-truelayer-sync](https://github.com/sheppy/actual-truelayer-sync).** Differences from upstream:
+>
+> - The `@actual-app/api` client version can be set at build time to match your Actual server, via the `ACTUAL_API_VERSION` build arg. If it's unset, the version in `package-lock.json` is used.
+> - The Docker image is built locally from this repo rather than pulled from ghcr.io:
+>
+>   ```yaml
+>   actual-truelayer-sync:
+>     build:
+>       context: "https://github.com/harrytouche/actual-truelayer-sync.git#env-api-version"
+>       args:
+>         ACTUAL_API_VERSION: ${ACTUAL_VERSION}  # same value as your Actual server image tag
+>   ```
+>
+>   After changing `ACTUAL_VERSION`, rebuild with `docker compose up -d --build`.
+
 Syncs bank and credit card transactions from [TrueLayer](https://truelayer.com/) into [Actual Budget](https://actualbudget.org/). Runs as a scheduled Docker container.
 
 **Supported banks:** Any UK bank supported by TrueLayer's Open Banking or OAuth connections (Monzo, Starling, Barclays, HSBC, Lloyds, NatWest, Santander, and many more).

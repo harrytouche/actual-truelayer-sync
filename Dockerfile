@@ -1,7 +1,11 @@
 FROM node:24-alpine AS builder
 WORKDIR /build
 COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+ARG ACTUAL_API_VERSION
+RUN npm ci --ignore-scripts && \
+    if [ -n "$ACTUAL_API_VERSION" ]; then \
+      npm install --ignore-scripts --save-exact "@actual-app/api@$ACTUAL_API_VERSION"; \
+    fi
 COPY tsconfig.json tsconfig.build.json ./
 COPY src/ ./src/
 RUN npm run build && npm prune --omit=dev
