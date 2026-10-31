@@ -58,6 +58,43 @@ The key values you need are:
 - `ACTUAL_SERVER_PASSWORD` — your Actual Budget password
 - `ACTUAL_SYNC_ID` — found under **Settings → Show advanced settings → ID** in Actual Budget
 - `TRUELAYER_CLIENT_ID` and `TRUELAYER_CLIENT_SECRET` — from the TrueLayer Console
+- `ACTUAL_ENCRYPTION_PASSWORD` (optional) — only if the budget file has end-to-end encryption turned on. This is the file's encryption password, not the server password.
+
+### Syncing multiple budget files
+
+Each container syncs one budget file. To sync several, run one container per budget file, each with its own `ACTUAL_SYNC_ID`, its own `ACTUAL_ENCRYPTION_PASSWORD` (if that file is encrypted) and its own data volume. `config.json`, `state.json` and the Actual cache all live in `/app/data`, so two containers must never share that folder.
+
+```yaml
+services:
+  truelayer-sync-personal:
+    image: ghcr.io/sheppy/actual-truelayer-sync:latest
+    restart: unless-stopped
+    volumes:
+      - ./actual-truelayer-sync/personal:/app/data
+    environment:
+      - ACTUAL_SERVER_URL=http://[HOST_IP]:5006
+      - ACTUAL_SERVER_PASSWORD=[PASSWORD]
+      - ACTUAL_SYNC_ID=[PERSONAL_SYNC_ID]
+      - ACTUAL_ENCRYPTION_PASSWORD=[PERSONAL_ENCRYPTION_PASSWORD]
+      - TRUELAYER_CLIENT_ID=[TRUELAYER_CLIENT_ID]
+      - TRUELAYER_CLIENT_SECRET=[TRUELAYER_CLIENT_SECRET]
+      - CRON_SCHEDULE=0 */4 * * *
+
+  truelayer-sync-household:
+    image: ghcr.io/sheppy/actual-truelayer-sync:latest
+    restart: unless-stopped
+    volumes:
+      - ./actual-truelayer-sync/household:/app/data
+    environment:
+      - ACTUAL_SERVER_URL=http://[HOST_IP]:5006
+      - ACTUAL_SERVER_PASSWORD=[PASSWORD]
+      - ACTUAL_SYNC_ID=[HOUSEHOLD_SYNC_ID]
+      - TRUELAYER_CLIENT_ID=[TRUELAYER_CLIENT_ID]
+      - TRUELAYER_CLIENT_SECRET=[TRUELAYER_CLIENT_SECRET]
+      - CRON_SCHEDULE=0 */4 * * *
+```
+
+Run the setup script once per service (e.g. `docker compose run --rm truelayer-sync-personal npm run setup`), so each gets its own `config.json` and `state.json`.
 
 ---
 

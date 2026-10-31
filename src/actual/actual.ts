@@ -4,6 +4,7 @@ interface InitOptions {
   serverURL: string
   password: string
   syncId: string
+  encryptionPassword?: string
   verbose: boolean
 }
 
@@ -14,7 +15,11 @@ export async function initActual(options: InitOptions): Promise<void> {
     verbose: options.verbose,
     dataDir: './data',
   })
-  await actual.downloadBudget(options.syncId)
+  if (options.encryptionPassword) {
+    await actual.downloadBudget(options.syncId, { password: options.encryptionPassword })
+  } else {
+    await actual.downloadBudget(options.syncId)
+  }
 }
 
 export async function importTransactions(
