@@ -15,10 +15,19 @@ export async function initActual(options: InitOptions): Promise<void> {
     verbose: options.verbose,
     dataDir: './data',
   })
-  if (options.encryptionPassword) {
-    await actual.downloadBudget(options.syncId, { password: options.encryptionPassword })
-  } else {
-    await actual.downloadBudget(options.syncId)
+  try {
+    if (options.encryptionPassword) {
+      await actual.downloadBudget(options.syncId, { password: options.encryptionPassword })
+    } else {
+      await actual.downloadBudget(options.syncId)
+    }
+  } catch (err) {
+    // The API's messages don't name our env var, which is all a headless user can change.
+    const code = (err as { code?: string })?.code
+    if (err instanceof Error && (code === 'missing-key' || code === 'decrypt-failure')) {
+      err.message += " Set or check ACTUAL_ENCRYPTION_PASSWORD (the budget file's encryption password)."
+    }
+    throw err
   }
 }
 
