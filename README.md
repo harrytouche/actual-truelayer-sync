@@ -39,7 +39,29 @@ Syncs bank and credit card transactions from [TrueLayer](https://truelayer.com/)
    ```
    https://console.truelayer.com/redirect-page
    ```
-4. Copy your **Client ID** and **Client Secret** — you'll need them shortly.
+4. Copy your **Client ID** and **Client Secret** — you'll need them shortly. The secret is only shown once, when it's created, so save it somewhere safe straight away.
+
+### If your TrueLayer credentials don't work
+
+- **The eye icon shows the secret identifier, not the secret.** Pasting the identifier as `TRUELAYER_CLIENT_SECRET` gives `{"error":"invalid_client"}`.
+- **Lost the secret?** Click **Add secret** (up to six can be active at once), copy it as soon as it's created, and wait up to 15 minutes before using it. Don't delete the old secret while any container still uses it.
+- **Live and Sandbox are separate**, each with its own Client ID and secret. Live uses `auth.truelayer.com`; Sandbox uses `auth.truelayer-sandbox.com`. This tool talks to Live.
+
+To check your Client ID and secret without using a real bank login, send a fake code:
+
+```
+curl -X POST https://auth.truelayer.com/connect/token \
+  --data-urlencode 'grant_type=authorization_code' \
+  --data-urlencode 'client_id=[CLIENT_ID]' \
+  --data-urlencode 'client_secret=[CLIENT_SECRET]' \
+  --data-urlencode 'redirect_uri=https://console.truelayer.com/redirect-page' \
+  --data-urlencode 'code=fake'
+```
+
+- `invalid_grant` — your credentials are fine (the code is fake, as expected).
+- `invalid_client` — the Client ID or secret is wrong.
+
+Keep the single quotes and `--data-urlencode`: secrets can contain `+` and shell special characters that would otherwise be mangled.
 
 ---
 
@@ -60,43 +82,140 @@ The key values you need are:
 - `ACTUAL_SERVER_PASSWORD` — your Actual Budget password
 - `ACTUAL_SYNC_ID` — found under **Settings → Show advanced settings → ID** in Actual Budget
 - `TRUELAYER_CLIENT_ID` and `TRUELAYER_CLIENT_SECRET` — from the TrueLayer Console
-- `ACTUAL_ENCRYPTION_PASSWORD` (optional) — only if the budget file has end-to-end encryption turned on. This is the file's encryption password, not the server password.
+- `ACTUAL_ENCRYPTION_PASSWORD` (optional) — only if the budget file has end-to-end encryption turned on. See [Encrypted budgets](#encrypted-budgets).
+
+### Encrypted budgets
+
+`ACTUAL_ENCRYPTION_PASSWORD` is the budget file's end-to-end encryption password — the one set in Actual under **Settings → Show advanced settings → End-to-end encryption**. It is **not** the server password. Leave it unset (or empty) for unencrypted files.
+
+Turning encryption on in Actual changes the budget's Sync ID. After you turn it on:
+
+1. Copy the new Sync ID from **Settings → Show advanced settings** into `ACTUAL_SYNC_ID`.
+2. Set `ACTUAL_ENCRYPTION_PASSWORD`.
+3. Delete the cached budget folder inside your data directory — the folder named after the budget, e.g. `My-Finances-xxxxxxx`. **Don't** delete `config.json` or `state.json`.
+4. Recreate the container:
+   ```
+   docker compose up -d actual-truelayer-sync
+   ```
+
+If you skip these steps you'll see one of:
+
+- `Budget ... not found. Check the sync id` — `ACTUAL_SYNC_ID` is still the old one.
+- `unknown problem opening <budget>` — usually the cached budget folder from before encryption.
+- An error ending `Set or check ACTUAL_ENCRYPTION_PASSWORD` — the password is missing or wrong.
 
 ### Syncing multiple budget files
 
-Each container syncs one budget file. To sync several, run one container per budget file, each with its own `ACTUAL_SYNC_ID`, its own `ACTUAL_ENCRYPTION_PASSWORD` (if that file is encrypted) and its own data volume. `config.json`, `state.json` and the Actual cache all live in `/app/data`, so two containers must never share that folder.
+Each container syncs one budget file. To sync several, run one container per budget file. Each needs:
+
+- its own `ACTUAL_SYNC_ID`
+- its own `ACTUAL_ENCRYPTION_PASSWORD`, if that file is encrypted
+- its own data volume
+
+The TrueLayer Client ID and secret, and the Actual server URL and password, can be shared.
+
+**Never share a data volume between containers.** Everything lives in `/app/data`:
+
+- `config.json` would mix bank-to-account mappings from different budgets.
+- Both containers would overwrite each other's `state.json`. TrueLayer rotates refresh tokens, so one lost write can break that bank connection until you set it up again.
+- The cached Actual budget lives there too.
+
+Example `docker-compose.yml` with two sync services sharing one Actual server:
 
 ```yaml
 services:
-  truelayer-sync-personal:
-    image: ghcr.io/sheppy/actual-truelayer-sync:latest
+  actual-truelayer-sync:
+    build:
+      context: "https://github.com/harrytouche/actual-truelayer-sync.git"
+      args:
+        ACTUAL_API_VERSION: ${ACTUAL_VERSION}
     restart: unless-stopped
     volumes:
-      - ./actual-truelayer-sync/personal:/app/data
+      - ./actual-truelayer-sync/data:/app/data
     environment:
-      - ACTUAL_SERVER_URL=http://[HOST_IP]:5006
-      - ACTUAL_SERVER_PASSWORD=[PASSWORD]
-      - ACTUAL_SYNC_ID=[PERSONAL_SYNC_ID]
-      - ACTUAL_ENCRYPTION_PASSWORD=[PERSONAL_ENCRYPTION_PASSWORD]
-      - TRUELAYER_CLIENT_ID=[TRUELAYER_CLIENT_ID]
-      - TRUELAYER_CLIENT_SECRET=[TRUELAYER_CLIENT_SECRET]
+      - ACTUAL_SERVER_URL=${ACTUAL_SERVER_URL}
+      - ACTUAL_SERVER_PASSWORD=${ACTUAL_SERVER_PASSWORD}
+      - ACTUAL_SYNC_ID=${ACTUAL_SYNC_ID}
+      - ACTUAL_ENCRYPTION_PASSWORD=${ACTUAL_ENCRYPTION_PASSWORD}
+      - TRUELAYER_CLIENT_ID=${TRUELAYER_CLIENT_ID}
+      - TRUELAYER_CLIENT_SECRET=${TRUELAYER_CLIENT_SECRET}
       - CRON_SCHEDULE=0 */4 * * *
 
-  truelayer-sync-household:
-    image: ghcr.io/sheppy/actual-truelayer-sync:latest
+  actual-truelayer-sync-2:
+    build:
+      context: "https://github.com/harrytouche/actual-truelayer-sync.git"
+      args:
+        ACTUAL_API_VERSION: ${ACTUAL_VERSION}
     restart: unless-stopped
     volumes:
-      - ./actual-truelayer-sync/household:/app/data
+      - ./actual-truelayer-sync/data-2:/app/data
     environment:
-      - ACTUAL_SERVER_URL=http://[HOST_IP]:5006
-      - ACTUAL_SERVER_PASSWORD=[PASSWORD]
-      - ACTUAL_SYNC_ID=[HOUSEHOLD_SYNC_ID]
-      - TRUELAYER_CLIENT_ID=[TRUELAYER_CLIENT_ID]
-      - TRUELAYER_CLIENT_SECRET=[TRUELAYER_CLIENT_SECRET]
+      - ACTUAL_SERVER_URL=${ACTUAL_SERVER_URL}
+      - ACTUAL_SERVER_PASSWORD=${ACTUAL_SERVER_PASSWORD}
+      - ACTUAL_SYNC_ID=${ACTUAL_SYNC_ID_2}
+      - ACTUAL_ENCRYPTION_PASSWORD=${ACTUAL_ENCRYPTION_PASSWORD_2}
+      - TRUELAYER_CLIENT_ID=${TRUELAYER_CLIENT_ID}
+      - TRUELAYER_CLIENT_SECRET=${TRUELAYER_CLIENT_SECRET}
       - CRON_SCHEDULE=0 */4 * * *
 ```
 
-Run the setup script once per service (e.g. `docker compose run --rm truelayer-sync-personal npm run setup`), so each gets its own `config.json` and `state.json`.
+Matching `.env`:
+
+```
+ACTUAL_VERSION=26.10.0
+ACTUAL_SERVER_URL=http://192.168.1.10:5006
+ACTUAL_SERVER_PASSWORD=
+TRUELAYER_CLIENT_ID=
+TRUELAYER_CLIENT_SECRET=
+
+# Budget 1
+ACTUAL_SYNC_ID=
+ACTUAL_ENCRYPTION_PASSWORD=
+
+# Budget 2
+ACTUAL_SYNC_ID_2=
+ACTUAL_ENCRYPTION_PASSWORD_2=
+```
+
+An empty `ACTUAL_ENCRYPTION_PASSWORD` is treated as unset, so leave it blank for an unencrypted budget. If you set `container_name`, give each service a different one.
+
+Set up banks separately for each container, so each gets its own bank consents and its own `state.json`. **Never copy `state.json` between containers.**
+
+Authorising the same bank login for two containers is usually fine, but some banks allow only one active consent per app and revoke the older one. After setting up the second container, restart the first (it syncs on startup) and check its logs:
+
+```
+docker compose restart actual-truelayer-sync
+```
+
+```
+docker compose logs -f actual-truelayer-sync
+```
+
+### Docker gotchas
+
+**`EACCES: permission denied, mkdir 'data/...'`** — the container runs as the `node` user (UID 1000). If Docker created the host data folder for you, root owns it. Fix the owner:
+
+```
+sudo chown -R 1000:1000 ./actual-truelayer-sync/data
+```
+
+Or copy the owner from a folder that already works:
+
+```
+sudo chown -R --reference=./actual-truelayer-sync/data ./actual-truelayer-sync/data-2
+```
+
+Don't use `chmod 777` — the folder holds your bank refresh tokens.
+
+**`.env` changes aren't picked up** — `docker compose restart` reuses the existing container and its old environment. Recreate it instead:
+
+```
+docker compose up -d actual-truelayer-sync
+```
+
+Add `--build` when building from source, so code changes are included too.
+
+**Running a fork** — point `build:` at the fork (a git URL as above, or a local path such as `build: .`) instead of using `image: ghcr.io/sheppy/actual-truelayer-sync`, which is the upstream image.
 
 ---
 
@@ -179,12 +298,14 @@ After authenticating with your bank, you'll be redirected to a URL containing a 
 
 ```
 curl -X POST https://auth.truelayer.com/connect/token \
-  -d grant_type=authorization_code \
-  -d client_id=[CLIENT_ID] \
-  -d client_secret=[CLIENT_SECRET] \
-  -d redirect_uri=https://console.truelayer.com/redirect-page \
-  -d code=[CODE]
+  --data-urlencode 'grant_type=authorization_code' \
+  --data-urlencode 'client_id=[CLIENT_ID]' \
+  --data-urlencode 'client_secret=[CLIENT_SECRET]' \
+  --data-urlencode 'redirect_uri=https://console.truelayer.com/redirect-page' \
+  --data-urlencode 'code=[CODE]'
 ```
+
+Keep the single quotes and `--data-urlencode` so a `+` or shell special characters in the secret aren't mangled.
 
 The response contains a `refresh_token`. Add this to `state.json` under the connection name.
 
@@ -276,6 +397,22 @@ docker compose logs -f actual-truelayer-sync
 ## Migrating from v1
 
 If you have an existing `config.json` from before the config/state split, see [MIGRATION.md](MIGRATION.md).
+
+---
+
+## Troubleshooting
+
+| Error                                                 | Cause                                                       | Fix                                                                                                           |
+| ----------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `Budget ... not found. Check the sync id`             | `ACTUAL_SYNC_ID` is stale (e.g. encryption was turned on)   | Copy the current Sync ID into `ACTUAL_SYNC_ID` and recreate the container                                     |
+| `unknown problem opening <budget>`                    | Cached budget folder from before encryption was turned on   | Delete the budget folder in the data directory (not `config.json`/`state.json`) and recreate the container   |
+| Error ending `Set or check ACTUAL_ENCRYPTION_PASSWORD` | Budget is encrypted and the password is missing or wrong   | Set `ACTUAL_ENCRYPTION_PASSWORD` to the file's encryption password (not the server password)                 |
+| `EACCES: permission denied, mkdir 'data/...'`         | Host data folder owned by root; container runs as UID 1000 | `sudo chown -R 1000:1000 <host data folder>`                                                                  |
+| `.env` change has no effect                           | `docker compose restart` keeps the old environment          | `docker compose up -d <service>` (add `--build` when building from source)                                    |
+| `{"error":"invalid_client"}`                          | Wrong Client ID or secret, often the secret identifier      | Create a new secret with **Add secret**, copy it at creation, wait up to 15 minutes                           |
+| A bank connection stops working after adding another container | The bank allows one consent per app and revoked the older one | Set that bank up again in the first container                                                      |
+
+See [Encrypted budgets](#encrypted-budgets), [Docker gotchas](#docker-gotchas) and [If your TrueLayer credentials don't work](#if-your-truelayer-credentials-dont-work) for details.
 
 ---
 
