@@ -194,6 +194,13 @@ describe('EnvSchema', () => {
     expect(result.success).toBe(true)
   })
 
+  it('accepts env with and without ACTUAL_ENCRYPTION_PASSWORD', () => {
+    expect(EnvSchema.parse(validEnv).ACTUAL_ENCRYPTION_PASSWORD).toBeUndefined()
+    expect(EnvSchema.parse({ ...validEnv, ACTUAL_ENCRYPTION_PASSWORD: 'secret' }).ACTUAL_ENCRYPTION_PASSWORD).toBe(
+      'secret',
+    )
+  })
+
   it('rejects an invalid ACTUAL_SERVER_URL', () => {
     expect(EnvSchema.safeParse({ ...validEnv, ACTUAL_SERVER_URL: 'not-a-url' }).success).toBe(false)
   })

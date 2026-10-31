@@ -13,6 +13,7 @@ async function mainTask(config: Config): Promise<void> {
       serverURL: config.env.ACTUAL_SERVER_URL,
       password: config.env.ACTUAL_SERVER_PASSWORD,
       syncId: config.env.ACTUAL_SYNC_ID,
+      encryptionPassword: config.env.ACTUAL_ENCRYPTION_PASSWORD,
       verbose: !!config.env.DEBUG,
     })
 

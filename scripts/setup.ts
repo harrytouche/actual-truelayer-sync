@@ -61,6 +61,7 @@ async function main(): Promise<void> {
     ACTUAL_SERVER_URL: z.url(),
     ACTUAL_SERVER_PASSWORD: z.string().min(1),
     ACTUAL_SYNC_ID: z.uuid(),
+    ACTUAL_ENCRYPTION_PASSWORD: z.string().optional(),
   })
 
   const envResult = SetupEnvSchema.safeParse(process.env)
@@ -216,6 +217,7 @@ async function main(): Promise<void> {
         serverURL: env.ACTUAL_SERVER_URL,
         password: env.ACTUAL_SERVER_PASSWORD,
         syncId: env.ACTUAL_SYNC_ID,
+        encryptionPassword: env.ACTUAL_ENCRYPTION_PASSWORD,
         verbose: false,
       })
       const all = await getAccounts()
