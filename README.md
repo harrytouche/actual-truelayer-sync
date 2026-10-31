@@ -14,6 +14,8 @@
 >   ```
 >
 >   After changing `ACTUAL_VERSION`, rebuild with `docker compose up -d --build`.
+>
+> - A standalone `add-bank.mjs` script for adding banks without Docker or `npm install` — see [Adding a Bank with add-bank.mjs](#adding-a-bank-with-add-bankmjs).
 
 Syncs bank and credit card transactions from [TrueLayer](https://truelayer.com/) into [Actual Budget](https://actualbudget.org/). Runs as a scheduled Docker container.
 
@@ -124,6 +126,30 @@ The script will:
 5. Write `config.json` and `state.json` to your data directory
 
 Run it again for each additional bank you want to add.
+
+---
+
+## Adding a Bank with add-bank.mjs
+
+A lighter alternative to the setup script: a single file with no dependencies (Node 22.18+) that doesn't connect to Actual Budget. It requests bank accounts and cards together in one login.
+
+Run it from a folder containing a `.env` with `TRUELAYER_CLIENT_ID` and `TRUELAYER_CLIENT_SECRET`:
+
+```
+node --env-file=.env add-bank.mjs
+```
+
+The script will:
+
+1. Print a TrueLayer auth URL to open in your browser
+2. Ask you to paste back the redirect URL (or just the `code`)
+3. Exchange the code for tokens and fetch the bank's accounts and cards
+4. Ask for a connection name
+5. Create `tmp/config.json` and `tmp/state.json` in the current folder, or add the new bank to them if they already exist
+
+Run it once per bank — both files grow. Then, in `tmp/config.json`, delete any accounts you don't want and replace each `"TODO"` with the Actual Budget account ID (found in the URL when viewing an account in Actual Budget). Copy both files into your data volume and restart the container.
+
+`state.json` holds live refresh tokens — keep it private. `tmp/` is gitignored.
 
 ---
 
